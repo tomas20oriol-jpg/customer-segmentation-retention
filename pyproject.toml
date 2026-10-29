@@ -1,0 +1,22 @@
+[project]
+name = "customer-segmentation-retention"
+version = "0.1.0"
+description = "Customer segmentation (RFM + K-Means), cohort retention and churn prediction on Online Retail II"
+authors = [{ name = "Tomás Oriol Freixa" }]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["pandas (>=3.1.0,<4.0.0)", "numpy (>=2.5.4,<3.0.0)", "scipy (>=1.18.1,<2.0.0)", "matplotlib (>=3.11.2,<4.0.0)", "seaborn (>=0.13.2,<0.14.0)", "scikit-learn (>=1.9.1,<2.0.0)", "jupyter (>=1.1.1,<2.0.0)", "ipykernel (>=7.4.0,<8.0.0)", "openpyxl (>=3.1.5,<4.0.0)", "lifetimes (>=0.11.3,<0.12.0)", "pyarrow (>=26.0.0,<27.0.0)", "polars (>=2.1.0,<3.0.0)", "statsmodels (>=0.15.0,<0.16.0)"]
+
+[tool.poetry]
+package-mode = false
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.1.1,<10.0.0)",
+    "colorspacious (>=1.1.2,<2.0.0)"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
