@@ -84,7 +84,7 @@ The segment and retention items come from `02` and `03`. The churn items come fr
 
 ## Limitations
 
-- **Identified customers only.** 23% of the raw lines have no customer ID (15% of revenue) and are left out.
+- **Identified customers only.** 23% of the raw lines have no customer ID (15% of the gross sales revenue in the raw file, before removing the sheet overlap and duplicates) and are left out.
 - **Wholesale-heavy customer base.** Some customers place very large orders, so spend and frequency are strongly skewed. The results may not hold for a retailer that sells mainly to consumers.
 - **Two years of data.** The seasonal peak can only be seen twice. The one-year result for customers acquired in the peak rests on one autumn (2010).
 - **Cohort caveats.** The December 2009 cohort is the existing customer base, not new customers. The January–March 2010 cohorts are partly existing customers, so they are left out of comparisons. December 2011 is left out as a partial month.
@@ -94,19 +94,26 @@ The segment and retention items come from `02` and `03`. The churn items come fr
 - **One test cutoff.** The model was tested once, on 1 June 2011. Calibration in winter is untested, so today's scores (window December 2011 to May 2012, no autumn peak) are best read as a ranking.
 - **Training data from 2010.** The model learned from one year, and its seasonal term rests on a few cutoffs.
 - **Six months of feature history.** Longer-history features, such as tenure, were left out. The `02` segments use two years of history, so they partly repeat what the model sees.
-- **Value is a proxy.** Value is the last 6 months of sales, and a few very large customers drive the risk × value result.
+- **Value is a proxy.** Value is the last 6 months of sales, and a few very large customers drive the risk × value result. For today's scores that window contains the autumn peak, so the expected sales at risk are overstated and are best read as relative sizes.
+- **Customers without a segment.** A few of the scored customers (4 of 3,444) have a recent order but are not in `segments.parquet`, because the segments were built on customers with positive net revenue. They appear as "Not segmented" and do not change the percentages above.
 - **Cleaning assumptions.** Exact duplicate lines are treated as system duplicates. The data cannot confirm this.
 
 ## Reproduce
 
+Needs Python 3.12 or newer and Poetry.
+
 ```bash
 poetry install
+poetry run python -m ipykernel install --user --name customer-segmentation-retention   # once: the notebooks use this kernel
 # download the dataset zip from UCI and unzip it into data/raw/ (expected file: online_retail_II.xlsx)
-poetry run python -m src.make_dataset   # Excel -> data/interim/online_retail_II.parquet
-poetry run pytest                       # tests for cleaning, features and data contracts
+poetry run python -m src.make_dataset   # Excel -> data/interim/online_retail_II.parquet (reading the Excel takes minutes)
+poetry run jupyter nbconvert --to notebook --execute --inplace notebooks/0*.ipynb   # runs 01 to 04 in order
+poetry run pytest                       # run this last
 ```
 
-Then run the notebooks in order from `notebooks/`, using the Jupyter kernel `customer-segmentation-retention`.
+- **Run order matters.** `01` writes `lines`, `transactions`, `adjustments` and `customers` to `data/processed/`; `02` reads them and writes `segments`; `03` reads `transactions`; `04` reads `lines` and `segments` and writes `churn_scores`.
+- **Start notebooks from `notebooks/`.** They add the parent folder to `sys.path` with `Path.cwd().parent`. `nbconvert` does this for you; in Jupyter or VS Code, keep the working directory at `notebooks/`.
+- **Run `pytest` after the notebooks.** The data-contract tests check the files in `data/processed/` and are skipped when they do not exist yet, so on a fresh clone a green run before the notebooks has not checked them.
 
 ## Project structure
 
@@ -126,5 +133,5 @@ Then run the notebooks in order from `notebooks/`, using the Jupyter kernel `cus
 │   ├── churn.py         # churn features and labels per cutoff
 │   ├── plotting.py      # style, colours, save_fig
 │   └── cvd_check.py     # colour-blindness check for figures
-└── tests/            # pytest: cleaning, features, data contracts
+└── tests/            # pytest: cleaning, features, retention, churn, data contracts
 ```

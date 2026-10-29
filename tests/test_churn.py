@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 
 import polars as pl
+import pytest
 
 from src.churn import FEATURES, churn_dataset, churn_features, churn_labels, peak_days_ahead
 
@@ -20,8 +21,16 @@ def at(d, hour=12):
     return datetime(d.year, d.month, d.day, hour)
 
 
-def make_lines(rows):
-    """rows: (line_id, kind, customer, invoice, code, qty, price, date, country)"""
+def make_lines(rows, sentinel=True):
+    """rows: (line_id, kind, customer, invoice, code, qty, price, date, country)
+
+    By default a correction line of an unrelated customer is added the day after the label
+    horizon ends, so that the data covers the whole label window (`churn_dataset` refuses
+    windows the data does not cover). It is never a purchase and never in the population.
+    """
+    rows = list(rows)
+    if sentinel:
+        rows.append(correction(10**6, at(HORIZON_END + timedelta(days=1)), cust="SENTINEL"))
     return pl.DataFrame(
         [
             dict(line_id=i, kind=k, customer_id=c, invoice=inv, stock_code=code, quantity=q,
@@ -321,3 +330,33 @@ def test_peak_days_feature_follows_horizon_argument():
     rows = [sale(1, at(date(2010, 8, 30)))]
     out = churn_features(make_lines(rows), date(2010, 8, 31), horizon_days=30)
     assert row(out)["peak_days_ahead"] == 30
+
+
+# ---- guards ----
+
+def test_dataset_raises_when_label_window_is_not_fully_observed():
+    rows = [sale(1, at(date(2010, 6, 1)))]
+    lines = make_lines(rows, sentinel=False)  # data ends in June 2010, window ends in December
+    with pytest.raises(ValueError, match="not fully observed"):
+        churn_dataset(lines, CUTOFF)
+
+
+def test_dataset_accepts_data_ending_exactly_at_window_end():
+    rows = [sale(1, at(date(2010, 6, 1))), sale(2, at(date(2010, 6, 2)), cust="B"),
+            sale(3, at(HORIZON_END), cust="B")]
+    out = churn_dataset(make_lines(rows, sentinel=False), CUTOFF)
+    assert dict(zip(out["customer_id"], out["churned"])) == {"A": 1, "B": 0}
+
+
+def test_features_alone_work_with_an_open_label_window():
+    rows = [sale(1, at(date(2010, 6, 1)))]
+    out = churn_features(make_lines(rows, sentinel=False), CUTOFF)  # scoring: no label needed
+    assert out.height == 1
+
+
+def test_datetime_cutoff_gives_the_same_result_as_date_cutoff():
+    rows = [sale(1, at(date(2010, 6, 1))), sale(2, at(CUTOFF), cust="B")]
+    lines = make_lines(rows)
+    as_datetime = datetime(CUTOFF.year, CUTOFF.month, CUTOFF.day)
+    assert churn_features(lines, as_datetime).equals(churn_features(lines, CUTOFF))
+    assert churn_dataset(lines, as_datetime).equals(churn_dataset(lines, CUTOFF))

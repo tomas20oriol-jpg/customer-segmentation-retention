@@ -1,7 +1,7 @@
 """Convert the UCI Excel file (two yearly sheets) into a single parquet file.
 
 Reading the 45 MB workbook takes minutes, so this runs once and the notebooks
-read the parquet. Run from the project root: `.venv/bin/python -m src.make_dataset`.
+read the parquet. Run from the project root: `poetry run python -m src.make_dataset`.
 """
 
 import pandas as pd

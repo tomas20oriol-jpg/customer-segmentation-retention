@@ -227,3 +227,11 @@ def test_as_of_datetime_is_used_as_is():
 
 def test_purchases_has_no_corrected_invoices_field():
     assert "corrected_invoices" not in split_purchases(make_lines([]))._fields
+
+
+def test_matching_is_the_same_whatever_the_row_order_with_tied_timestamps():
+    rows = [sale(1, D1), sale(2, D1), cancel(3, D2), cancel(4, D2)]
+    forward = match_cancelled_lines(make_lines(rows)).sort("cancel_line").select("cancel_line", "sale_line")
+    backward = match_cancelled_lines(make_lines(rows[::-1])).sort("cancel_line").select("cancel_line", "sale_line")
+    assert forward.rows() == backward.rows()
+    assert len(forward.rows()) == 2

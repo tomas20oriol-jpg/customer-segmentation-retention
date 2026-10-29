@@ -28,13 +28,28 @@ def cohort_activity(transactions: pl.DataFrame, last_month: date) -> pl.DataFram
     ).sort("customer_id", "month")
 
 
-def retention_table(activity: pl.DataFrame) -> pl.DataFrame:
+def retention_table(activity: pl.DataFrame, last_month: date | None = None) -> pl.DataFrame:
     """Share of each cohort active `months_since_first` months after acquisition.
-    Only observed combinations appear, so the right-censored corner is simply absent."""
+
+    Without `last_month` only observed combinations appear, so the right-censored corner is
+    absent, but an observed month in which nobody was active is absent too. With `last_month`
+    (the last observed month, as passed to `cohort_activity`) every observed cell is present,
+    with 0 active customers where nobody bought, and only unobserved cells are missing.
+    """
     sizes = activity.filter(pl.col("months_since_first") == 0).group_by("cohort").agg(cohort_size=pl.len())
+    counts = activity.group_by("cohort", "months_since_first").agg(active=pl.len())
+    if last_month is not None:
+        grid = sizes.select(
+            "cohort",
+            months_since_first=pl.int_ranges(
+                0, months_between(pl.col("cohort"), pl.lit(last_month)) + 1, dtype=pl.Int64
+            ),
+        ).explode("months_since_first")
+        counts = grid.join(counts, on=["cohort", "months_since_first"], how="left").with_columns(
+            pl.col("active").fill_null(0)
+        )
     return (
-        activity.group_by("cohort", "months_since_first").agg(active=pl.len())
-        .join(sizes, on="cohort")
+        counts.join(sizes, on="cohort")
         .with_columns(retention=pl.col("active") / pl.col("cohort_size"))
         .sort("cohort", "months_since_first")
     )

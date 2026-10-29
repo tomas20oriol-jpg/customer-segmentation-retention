@@ -160,3 +160,15 @@ def test_purchase_intervals_empty_input():
 def test_only_purchase_on_data_end_gives_no_rows():
     t = tx([(1, datetime(2010, 12, 31))])
     assert purchase_intervals(t, END).height == 0
+
+
+def test_observed_month_with_nobody_active_is_zero_when_last_month_given():
+    t = tx([(1, datetime(2010, 1, 10)), (2, datetime(2010, 3, 10))])
+    last = date(2010, 3, 1)
+    r = retention_table(cohort_activity(t, last), last_month=last)
+    jan = r.filter(pl.col("cohort") == date(2010, 1, 1))
+    assert jan["months_since_first"].to_list() == [0, 1, 2]
+    assert jan["active"].to_list() == [1, 0, 0]
+    assert jan["retention"].to_list() == [1.0, 0.0, 0.0]
+    # the right-censored corner stays absent: March cohort only has month 0 observed
+    assert r.filter(pl.col("cohort") == date(2010, 3, 1))["months_since_first"].to_list() == [0]
